@@ -30,6 +30,14 @@ def dashboard() -> str:
     return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
 
+@app.get("/favicon.svg")
+def favicon() -> Response:
+    return Response(
+        content=(STATIC_DIR / "favicon.svg").read_bytes(),
+        media_type="image/svg+xml",
+    )
+
+
 @app.get("/api/findings")
 def api_findings() -> list[dict]:
     return [f.model_dump() for f in storage.list_findings()]
