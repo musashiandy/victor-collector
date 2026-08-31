@@ -83,14 +83,30 @@ applied.
 
 ## What's not built yet
 
-`victor enroll` / `victor run` (cloud-connected mode) are real CLI
-commands but exit with a clear "not implemented" message — there is no
-cloud API to talk to yet (`victor-recon-console`'s `BACKLOG.md` M0 /
-`docs/cloud-api-design.md`). Don't stub in fake success for these; the
-current honest failure is correct until the wire protocol has a real
-server on the other end. `package-baseline-diff` (the one credentialed
-plugin) and the Docker image are also still open — see
-`collector-design.md` §14.
+**`victor enroll` / `victor run` (cloud-connected mode) — current top
+priority.** They're real CLI commands but still just print "not
+implemented." That message is now out of date in spirit, not just
+wording: the cloud API is live in production
+(`victor-recon-console`'s `DEPLOYMENT_STATUS.md`), the wire protocol
+these commands need to speak is fully specified
+(`docs/collector-design.md` §7) and has been proven correct against a
+real server from the *other* side (a curl-driven enroll → heartbeat →
+tasks → observations chain, and a real browser-issued enrollment token
+that successfully enrolled a collector — see
+`DEPLOYMENT_STATUS.md` §5). What's missing is purely this client: HTTP
+calls via `httpx`, credential storage at `~/.victor/credentials.json`
+(mode `0600`), and the heartbeat/poll/run-plugin/redact/upload daemon
+loop. Don't stub in fake success in the meantime — the current honest
+failure is correct until this is actually built.
+
+Privacy Mode redaction (`docs/collector-design.md` §8) is also not
+built yet — there's been nothing to redact so far, since Standalone
+Mode never uploads anything. It needs to land alongside `victor run`,
+not after, since redaction has to be in place before the first real
+upload, not bolted on retroactively.
+
+`package-baseline-diff` (the one credentialed plugin) and the Docker
+image are also still open — see `collector-design.md` §14.
 
 ## License
 
