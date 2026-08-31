@@ -49,4 +49,8 @@ def list_plugins() -> list[ReconPlugin]:
 # Importing here (rather than at package top) registers each plugin as a
 # side effect of import, keeping this file the single source of truth for
 # "what plugins exist" without a separate manual registration step.
-from victor_collector.plugins import service_inventory  # noqa: E402,F401
+from victor_collector.plugins import (  # noqa: E402,F401
+    http_header_audit,
+    service_inventory,
+    tls_review,
+)
