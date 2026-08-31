@@ -51,6 +51,7 @@ def list_plugins() -> list[ReconPlugin]:
 # "what plugins exist" without a separate manual registration step.
 from victor_collector.plugins import (  # noqa: E402,F401
     http_header_audit,
+    package_baseline_diff,
     service_inventory,
     tls_review,
 )

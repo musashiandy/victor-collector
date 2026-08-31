@@ -155,11 +155,14 @@ def _run_recon(
     ollama_url: str,
     ollama_model: str,
     describe: Callable[[dict], str],
+    extra_config: dict | None = None,
 ) -> None:
     """Shared execution loop for every `victor recon <plugin>` command:
     run the plugin, save each observation, optionally triage and save the
     resulting finding. `describe` renders the plugin-specific one-line
-    summary — everything else is identical across plugins.
+    summary — everything else is identical across plugins. `extra_config`
+    passes plugin-specific options through (e.g. package-baseline-diff's
+    --credential-ref).
     """
     plugin = plugins.get(plugin_name)
     if not safe_mode and not plugin.safe_mode:
@@ -168,7 +171,7 @@ def _run_recon(
 
     typer.echo(f"Running {plugin_name} against {target_value}...")
     try:
-        observations = plugin.run(Target(value=target_value), PluginConfig())
+        observations = plugin.run(Target(value=target_value), PluginConfig(extra_config or {}))
     except RuntimeError as exc:
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(code=1) from None
@@ -254,6 +257,45 @@ def recon_http_header_audit(
         ollama_url,
         ollama_model,
         _describe_http_header_audit,
+    )
+
+
+def _describe_package_baseline_diff(raw: dict) -> str:
+    if raw.get("status") == "baseline_established":
+        return f"{raw.get('package_manager')}: baseline established ({raw.get('package_count')} packages)"
+    added, removed, changed = raw.get("added", {}), raw.get("removed", {}), raw.get("changed", {})
+    if not raw.get("drift_detected"):
+        return f"{raw.get('package_manager')}: no drift ({raw.get('current_package_count')} packages)"
+    return (
+        f"{raw.get('package_manager')}: drift detected — "
+        f"+{len(added)} -{len(removed)} ~{len(changed)}"
+    )
+
+
+@recon_app.command(name="package-baseline-diff")
+def recon_package_baseline_diff(
+    target: str = typer.Argument(..., help="Host to SSH into."),
+    credential_ref: str = typer.Option(
+        ..., "--credential-ref", help="Name of a credential file in ~/.victor/credentials/."
+    ),
+    triage_results: bool = typer.Option(
+        True, "--triage/--no-triage", help="Attempt local Ollama triage after scanning."
+    ),
+    ollama_url: str = typer.Option(triage.DEFAULT_OLLAMA_URL, help="Local Ollama API base URL."),
+    ollama_model: str = typer.Option(triage.DEFAULT_MODEL, help="Ollama model to use for triage."),
+) -> None:
+    """SSH in, list installed packages, diff against the locally stored
+    baseline (established automatically on the first run against a
+    given target)."""
+    _run_recon(
+        "package-baseline-diff",
+        target,
+        True,
+        triage_results,
+        ollama_url,
+        ollama_model,
+        _describe_package_baseline_diff,
+        extra_config={"credential_ref": credential_ref},
     )
 
 

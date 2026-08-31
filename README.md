@@ -4,18 +4,18 @@ Open-source recon agent for [VICTOR Recon](https://victorrecon.com) — runs
 standalone with local AI, or connects to the cloud for deep AI triage. MIT
 licensed.
 
-> **Status: early v0.1.** Three recon plugins (`service-inventory`,
-> `tls-review`, `http-header-audit`) are real end-to-end: run one, it
-> triages results against a local Ollama model, stores real findings, and
-> `victor ui` serves them in a local dashboard with HTML/Markdown/XLSX
-> export — no cloud account needed. **The full cloud-connected loop is
-> real now too** — `victor enroll` and `victor run` (heartbeat, task
-> poll, plugin execution, Privacy Mode redaction, observation upload)
-> all work against the live cloud API, verified end-to-end against real
-> AWS, not just mocks (see `DEPLOYMENT_STATUS.md` in victor-recon-console).
-> The one thing that loop can't yet be driven by for real is a way for
-> the web app to actually create a task — that endpoint doesn't exist
-> server-side yet (`BACKLOG.md` M0.5).
+> **Status: early v0.1.** All four MVP recon plugins (`service-inventory`,
+> `tls-review`, `http-header-audit`, `package-baseline-diff`) are real:
+> run one standalone, it triages results against a local Ollama model,
+> stores real findings, and `victor ui` serves them in a local dashboard
+> with HTML/Markdown/XLSX export — no cloud account needed. **The full
+> cloud-connected loop is real too** — `victor enroll` and `victor run`
+> (heartbeat, task poll, plugin execution, Privacy Mode redaction,
+> observation upload) work against the live cloud API, verified
+> end-to-end against real AWS including a real "Run Recon" click through
+> the actual web UI queuing a task a real collector picked up organically
+> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). The Docker image
+> is the one thing left from the MVP checklist — see [Roadmap](#roadmap).
 
 ## What this is
 
@@ -62,6 +62,13 @@ victor recon service-inventory 10.10.10.25
 victor recon tls-review 10.10.10.25
 victor recon http-header-audit https://10.10.10.25
 
+# Package baseline diff — needs a credential file first (the collector
+# never generates or stores secrets for target hosts itself):
+#   mkdir -p ~/.victor/credentials
+#   echo '{"username":"svc","auth_method":"key","key_path":"/path/to/key"}' \
+#     > ~/.victor/credentials/prod-host.json
+victor recon package-baseline-diff 10.10.10.25 --credential-ref prod-host
+
 # Skip triage, just see raw scan results
 victor recon service-inventory 10.10.10.25 --no-triage
 
@@ -96,13 +103,9 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist)
-and `BACKLOG.md`'s M1. `victor enroll` and `victor run` (heartbeat, task
-poll, plugin execution, Privacy Mode redaction, observation upload) are
-both done and proven against real AWS. Current priority order:
-`package-baseline-diff` (the one credentialed plugin — needs a
-credential-storage design decision first, `docs/collector-design.md`
-§15) → Docker image.
-PDF export (`weasyprint` in the original design) is deliberately deferred
+and `BACKLOG.md`'s M1. Every checklist item is done except the Docker
+image, which is the one thing left. PDF export (`weasyprint` in the
+original design) is deliberately deferred
 — it needs system-level Pango/Cairo libraries that complicate a clean
 `pip install`; HTML/Markdown/XLSX cover the same need for now.
 

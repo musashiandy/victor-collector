@@ -47,6 +47,22 @@ class CollectorCredentials(BaseModel):
     enrolled_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class SSHCredentialRef(BaseModel):
+    """A named SSH credential for `package-baseline-diff`, stored at
+    ~/.victor/credentials/<name>.json (mode 0600) — see
+    docs/collector-design.md §15 for why this is a plain, operator-
+    populated file rather than an OS keyring integration. The collector
+    only ever reads this; it never generates or manages secret material
+    for a target host itself.
+    """
+
+    username: str
+    auth_method: Literal["key", "password"]
+    key_path: str | None = None
+    key_passphrase: str | None = None
+    password: str | None = None
+
+
 class Finding(BaseModel):
     """Basic local-triage output (Standalone Mode, §9). Same shape the
     web app expects per docs/backend-integration.md, minus the fields

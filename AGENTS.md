@@ -127,10 +127,30 @@ nested anywhere in `raw` (recursive walk over dicts/lists). Reversal
 (for a future `report export` against cloud data) isn't built — nothing
 needs it yet since nothing downstream of upload exists.
 
-`package-baseline-diff` (the one credentialed plugin) and the Docker
-image are still open — see `collector-design.md` §14. Those are the
-current top priority now that both loops in the MVP checklist's closing
-line ("enroll → heartbeat → poll → run → redact → upload") are real.
+`package-baseline-diff` is real now too — the one credentialed plugin,
+`plugins/package_baseline_diff.py`. SSHes in (`paramiko`), lists
+packages (`dpkg -l`, falling back to `rpm -qa`), diffs against a
+locally stored baseline established on the target's first run (never
+overwritten automatically — a rolling diff against the previous run
+would hide slow drift). Credential storage resolved §15's open
+question: a plain file at `~/.victor/credentials/<name>.json`, mode
+`0600`, populated by the operator — not an OS keyring, since `keyring`
+needs a live Secret Service/D-Bus session that a headless Docker
+container (this collector's only officially supported deployment
+target) doesn't have by default. `parse_dpkg_output`/`parse_rpm_output`/
+`diff_packages` are pure and fully tested; the real SSH call itself
+isn't covered by an integration test (no local test server the way
+`tls_review` has one — bootstrapping a real `sshd` is meaningfully
+heavier, and neither Docker nor an SSH server was available in this
+session's dev environment to stand one up). Verified for real anyway,
+as far as this environment allows: the actual CLI, real credential
+loading, and a real `paramiko` connection attempt against a genuinely
+closed port all produce clean, correct errors end to end — only the
+literal "parse a real server's real output" step is untested against a
+live target.
+
+The Docker image is the one thing still open from `collector-design.md`
+§14's MVP checklist — see §11 for the base image and target platforms.
 
 ## License
 

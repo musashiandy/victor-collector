@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -38,6 +39,12 @@ CREATE TABLE IF NOT EXISTS findings (
     remediation TEXT NOT NULL,
     tags TEXT NOT NULL,
     source_observation_id TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS package_baselines (
+    target TEXT PRIMARY KEY,
+    packages TEXT NOT NULL,
+    established_at TEXT NOT NULL
 );
 """
 
@@ -84,6 +91,29 @@ def save_finding(finding: Finding, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(finding.tags),
                 finding.source_observation_id,
             ),
+        )
+
+
+def get_package_baseline(target: str, db_path: Path = DEFAULT_DB_PATH) -> dict[str, str] | None:
+    """The package-baseline-diff plugin's known-good reference for a
+    target — established once on first run, never overwritten
+    automatically (a rolling diff against the previous run would hide
+    slow drift; see docs/collector-design.md §5)."""
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT packages FROM package_baselines WHERE target = ?", (target,)
+        ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def save_package_baseline(
+    target: str, packages: dict[str, str], db_path: Path = DEFAULT_DB_PATH
+) -> None:
+    with connect(db_path) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO package_baselines (target, packages, established_at) "
+            "VALUES (?, ?, ?)",
+            (target, json.dumps(packages), datetime.now(timezone.utc).isoformat()),
         )
 
 
