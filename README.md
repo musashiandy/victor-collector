@@ -44,6 +44,11 @@ source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 ```
 
+> **Windows + PowerShell**: if your execution policy blocks `.ps1`
+> scripts (`Activate.ps1` included), skip activation and call the venv's
+> executables directly: `.venv\Scripts\victor.exe ui`,
+> `.venv\Scripts\python.exe -m pytest`.
+
 ## Usage
 
 ```bash
@@ -87,7 +92,9 @@ doesn't require nmap installed.
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist).
 Remaining: `package-baseline-diff` (the one credentialed plugin) →
-`victor enroll`/`victor run` once the cloud API exists → Docker image.
+`victor enroll`/`victor run` once the cloud API exists (design is done —
+[`docs/cloud-api-design.md`](https://github.com/musashiandy/victor-recon-console/blob/main/docs/cloud-api-design.md),
+not yet built) → Docker image.
 PDF export (`weasyprint` in the original design) is deliberately deferred
 — it needs system-level Pango/Cairo libraries that complicate a clean
 `pip install`; HTML/Markdown/XLSX cover the same need for now.
