@@ -2,9 +2,10 @@
 
 `victor recon <plugin> <target>` is real end to end right now: run the
 plugin, save the observation, triage it locally against Ollama if
-reachable, save and print the resulting finding. `enroll`/`run`/`ui` are
-present as real commands but not yet implemented - there's no cloud API
-to enroll against yet, and the local web UI is a separate build step.
+reachable, save and print the resulting finding. `enroll` is now real
+too - see sync_client.py and credentials.py. `run`'s heartbeat/poll/
+upload loop is still not implemented; the local web UI is a separate
+build step (victor_collector.ui).
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from collections.abc import Callable
 import httpx
 import typer
 
-from victor_collector import export, plugins, storage, triage
+from victor_collector import credentials, export, plugins, storage, sync_client, triage
 from victor_collector.models import Target
 from victor_collector.plugins import PluginConfig
 
@@ -31,27 +32,45 @@ def enroll(
     control_plane: str = typer.Option(..., "--control-plane", help="Cloud API base URL."),
 ) -> None:
     """Exchange a one-time token for a long-lived collector credential."""
-    typer.secho(
-        "Not implemented yet - there is no cloud API to enroll against "
-        "(BACKLOG.md M0 in victor-recon-console). Run recon commands standalone "
-        "in the meantime: `victor recon service-inventory <target>`.",
-        fg=typer.colors.YELLOW,
-    )
-    raise typer.Exit(code=1)
+    try:
+        creds = sync_client.enroll(token, control_plane)
+    except sync_client.EnrollmentError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+
+    credentials.save(creds)
+    typer.secho(f"Enrolled as {creds.collector_id}.", fg=typer.colors.GREEN)
+    typer.echo(f"Credential stored at {credentials.CREDENTIALS_PATH} (mode 0600).")
+    typer.echo("Run `victor run` to start the heartbeat/task loop (not yet implemented).")
 
 
 @app.command()
 def status() -> None:
     """Show collector enrollment status."""
-    typer.echo("Standalone - not enrolled with any control plane.")
+    creds = credentials.load()
+    if creds is None:
+        typer.echo("Standalone - not enrolled with any control plane.")
+        return
+    typer.echo(f"Enrolled as {creds.collector_id} @ {creds.control_plane}")
+    typer.echo(f"Enrolled at: {creds.enrolled_at.isoformat()}")
 
 
 @app.command(name="run")
 def run_daemon() -> None:
     """Cloud-connected daemon mode: heartbeat + task poll loop."""
+    creds = credentials.load()
+    if creds is None:
+        typer.secho(
+            "Not enrolled. Run `victor enroll --token <token> --control-plane <url>` first.",
+            fg=typer.colors.YELLOW,
+        )
+        raise typer.Exit(code=1)
+
     typer.secho(
-        "Not implemented yet - depends on `victor enroll` and the cloud API. "
-        "See docs/collector-design.md section 7 for the wire protocol this will speak.",
+        f"Enrolled as {creds.collector_id} @ {creds.control_plane}, but the "
+        "heartbeat/poll/run loop isn't implemented yet - only `victor enroll` is real "
+        "so far. See docs/collector-design.md section 7.2-7.4 for the wire protocol "
+        "this will speak.",
         fg=typer.colors.YELLOW,
     )
     raise typer.Exit(code=1)
@@ -88,9 +107,13 @@ def ui(
 @app.command(name="collector-info")
 def collector_info() -> None:
     """Show local collector metadata."""
-    typer.echo("victor-collector 0.1.0")
+    typer.echo(f"victor-collector {sync_client.VERSION}")
     typer.echo(f"local database: {storage.DEFAULT_DB_PATH}")
-    typer.echo("control plane: none (standalone)")
+    creds = credentials.load()
+    if creds is None:
+        typer.echo("control plane: none (standalone)")
+    else:
+        typer.echo(f"control plane: {creds.control_plane} (collector_id={creds.collector_id})")
 
 
 @plugins_app.command(name="list")

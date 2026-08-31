@@ -8,13 +8,12 @@ licensed.
 > `tls-review`, `http-header-audit`) are real end-to-end: run one, it
 > triages results against a local Ollama model, stores real findings, and
 > `victor ui` serves them in a local dashboard with HTML/Markdown/XLSX
-> export — no cloud account needed. **The cloud API is now live in
-> production** (see `DEPLOYMENT_STATUS.md` in victor-recon-console) —
-> `enroll`/`run` exist as real CLI commands but still just print "not
-> implemented"; the wire protocol they need to speak
-> (`docs/collector-design.md` §7) has a real, proven server on the other
-> end now, this client just hasn't been written yet. That's the current
-> top priority — see [Roadmap](#roadmap).
+> export — no cloud account needed. **`victor enroll` is real too now** —
+> exchanges a one-time token for a long-lived credential against the live
+> cloud API (see `DEPLOYMENT_STATUS.md` in victor-recon-console),
+> verified end-to-end against real AWS, not just mocks. `victor run`'s
+> heartbeat/poll/plugin/upload daemon loop is the one piece still
+> outstanding — see [Roadmap](#roadmap).
 
 ## What this is
 
@@ -95,10 +94,11 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist)
-and `BACKLOG.md`'s M1. Current priority order: real `victor enroll`/
-`victor run` against the now-live cloud API (credential storage at
-`~/.victor/credentials.json`, the heartbeat/poll/redact/upload daemon
-loop) → Privacy Mode redaction (`docs/collector-design.md` §8 — not yet
+and `BACKLOG.md`'s M1. Current priority order: `victor enroll` is done →
+`victor run`'s heartbeat/poll/redact/upload daemon loop (the wire
+protocol is proven correct against the real cloud API; `victor enroll`
+already established the injectable-`httpx.Client` pattern this should
+reuse) → Privacy Mode redaction (`docs/collector-design.md` §8 — not yet
 built, since nothing has uploaded to the cloud yet to redact) →
 `package-baseline-diff` (the one credentialed plugin) → Docker image.
 PDF export (`weasyprint` in the original design) is deliberately deferred

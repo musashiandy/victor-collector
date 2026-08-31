@@ -33,6 +33,20 @@ class RawObservation(BaseModel):
     redacted: bool = False
 
 
+class CollectorCredentials(BaseModel):
+    """Stored at ~/.victor/credentials.json (mode 0600) after `victor
+    enroll` succeeds — docs/collector-design.md §7.1. Never logged,
+    never included in evidence bundles.
+    """
+
+    control_plane: str
+    collector_id: str
+    credential: str
+    account_id: str
+    hostname: str
+    enrolled_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Finding(BaseModel):
     """Basic local-triage output (Standalone Mode, §9). Same shape the
     web app expects per docs/backend-integration.md, minus the fields

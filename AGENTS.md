@@ -83,21 +83,27 @@ applied.
 
 ## What's not built yet
 
-**`victor enroll` / `victor run` (cloud-connected mode) — current top
-priority.** They're real CLI commands but still just print "not
-implemented." That message is now out of date in spirit, not just
-wording: the cloud API is live in production
-(`victor-recon-console`'s `DEPLOYMENT_STATUS.md`), the wire protocol
-these commands need to speak is fully specified
-(`docs/collector-design.md` §7) and has been proven correct against a
-real server from the *other* side (a curl-driven enroll → heartbeat →
-tasks → observations chain, and a real browser-issued enrollment token
-that successfully enrolled a collector — see
-`DEPLOYMENT_STATUS.md` §5). What's missing is purely this client: HTTP
-calls via `httpx`, credential storage at `~/.victor/credentials.json`
-(mode `0600`), and the heartbeat/poll/run-plugin/redact/upload daemon
-loop. Don't stub in fake success in the meantime — the current honest
-failure is correct until this is actually built.
+**`victor enroll` is real** — `sync_client.py` (the injectable-client
+HTTP layer) and `credentials.py` (`~/.victor/credentials.json`, mode
+`0600`) now do the actual token-exchange call against
+`POST /v1/collectors/enroll`, verified against the real deployed API
+(not just moto/mocks): a live Cognito user issued a real enrollment
+token, `victor enroll` consumed it for a real credential, and replaying
+the same token correctly got rejected. `status`, `run`, and
+`collector-info` all read real enrollment state now instead of a
+hardcoded "standalone" string.
+
+**`victor run`'s daemon loop — current top priority.** Still just
+prints a message (now enrollment-aware, but the loop itself doesn't
+exist). What's missing: the heartbeat (~60s) and task-poll (~15s) async
+loop, running the matching plugin when a task is polled, Privacy Mode
+redaction, and the observation upload call. `sync_client.py` is where
+this belongs — it already establishes the injectable-`httpx.Client`
+pattern (`enroll()`'s `client` parameter) that `heartbeat()`/`tasks()`/
+`upload_observations()` should reuse for the same dependency-free
+testing `test_sync_client.py` already does via `httpx.MockTransport`.
+Don't stub in fake success in the meantime — the current honest failure
+is correct until this is actually built.
 
 Privacy Mode redaction (`docs/collector-design.md` §8) is also not
 built yet — there's been nothing to redact so far, since Standalone
