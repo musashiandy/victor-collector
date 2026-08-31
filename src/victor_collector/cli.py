@@ -14,7 +14,7 @@ from collections.abc import Callable
 import httpx
 import typer
 
-from victor_collector import plugins, storage, triage
+from victor_collector import export, plugins, storage, triage
 from victor_collector.models import Target
 from victor_collector.plugins import PluginConfig
 
@@ -51,21 +51,38 @@ def run_daemon() -> None:
     """Cloud-connected daemon mode: heartbeat + task poll loop."""
     typer.secho(
         "Not implemented yet - depends on `victor enroll` and the cloud API. "
-        "See docs/collector-design.md §7 for the wire protocol this will speak.",
+        "See docs/collector-design.md section 7 for the wire protocol this will speak.",
         fg=typer.colors.YELLOW,
     )
     raise typer.Exit(code=1)
+
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 @app.command()
-def ui(port: int = typer.Option(8787, help="Loopback-only local dashboard port.")) -> None:
-    """Standalone Mode local web UI (Sessions/Targets/Findings/Export)."""
-    typer.secho(
-        "Not implemented yet. For now, use `victor recon <plugin> <target>` and "
-        "`victor findings` to run recon and inspect stored results.",
-        fg=typer.colors.YELLOW,
-    )
-    raise typer.Exit(code=1)
+def ui(
+    port: int = typer.Option(8787, help="Local dashboard port."),
+    host: str = typer.Option(
+        "127.0.0.1",
+        help="Bind address. Refuses anything non-loopback - see docs/collector-design.md section 9.",
+    ),
+) -> None:
+    """Standalone Mode local web UI (Findings + Export, no cloud account needed)."""
+    if host not in _LOOPBACK_HOSTS:
+        typer.secho(
+            f"Refusing to bind to '{host}' - victor ui only serves loopback "
+            f"(one of {', '.join(sorted(_LOOPBACK_HOSTS))}). There is no auth "
+            "in v0.1; binding elsewhere would expose findings to your network. "
+            "See docs/collector-design.md sections 9 and 13.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    import uvicorn
+
+    typer.echo(f"VICTOR Collector dashboard: http://{host}:{port}")
+    uvicorn.run("victor_collector.ui.app:app", host=host, port=port, log_level="warning")
 
 
 @app.command(name="collector-info")
@@ -215,6 +232,27 @@ def recon_http_header_audit(
         ollama_model,
         _describe_http_header_audit,
     )
+
+
+_EXPORTERS = {"html": export.to_html, "md": export.to_markdown, "xlsx": export.to_xlsx}
+
+
+@app.command(name="report-export")
+def report_export(
+    fmt: str = typer.Option(..., "--format", help="html, md, or xlsx"),
+    output: str = typer.Option(..., "--output", help="Output file path."),
+) -> None:
+    """Export locally stored findings without starting the dashboard."""
+    if fmt not in _EXPORTERS:
+        typer.secho(f"Unsupported format '{fmt}'. Use one of: {', '.join(_EXPORTERS)}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    findings = storage.list_findings()
+    body = _EXPORTERS[fmt](findings)
+    mode = "wb" if isinstance(body, bytes) else "w"
+    with open(output, mode) as f:
+        f.write(body)
+    typer.echo(f"Wrote {len(findings)} finding(s) to {output}")
 
 
 @app.command(name="findings")

@@ -4,11 +4,13 @@ Open-source recon agent for [VICTOR Recon](https://victorrecon.com) — runs
 standalone with local AI, or connects to the cloud for deep AI triage. MIT
 licensed.
 
-> **Status: early v0.1.** `service-inventory` (port scan + banner grab) is
-> real and end-to-end: run it, and it triages results against a local
-> Ollama model and stores real findings. Everything else in the CLI
-> (`enroll`, `run`, `ui`) exists as a real command but isn't implemented
-> yet — see [Roadmap](#roadmap).
+> **Status: early v0.1.** Three recon plugins (`service-inventory`,
+> `tls-review`, `http-header-audit`) are real end-to-end: run one, it
+> triages results against a local Ollama model, stores real findings, and
+> `victor ui` serves them in a local dashboard with HTML/Markdown/XLSX
+> export — no cloud account needed. `enroll`/`run` exist as real commands
+> but aren't implemented yet, since there's no cloud API to talk to —
+> see [Roadmap](#roadmap).
 
 ## What this is
 
@@ -47,14 +49,23 @@ pip install -e ".[dev]"
 ```bash
 # Scan a target you're authorized to test, triage locally against Ollama
 victor recon service-inventory 10.10.10.25
+victor recon tls-review 10.10.10.25
+victor recon http-header-audit https://10.10.10.25
 
-# Skip triage, just see raw open ports/banners
+# Skip triage, just see raw scan results
 victor recon service-inventory 10.10.10.25 --no-triage
 
 # See what plugins exist
 victor plugins list
 
-# See locally stored findings (SQLite at ~/.victor/collector.db)
+# Browse findings in a local dashboard (http://127.0.0.1:8787, loopback-only)
+victor ui
+
+# Or just export without starting the dashboard
+victor report-export --format html --output report.html
+victor report-export --format xlsx --output report.xlsx
+
+# Or list findings straight from the CLI
 victor findings
 ```
 
@@ -75,9 +86,11 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist).
-Rough order: more recon plugins (TLS review, HTTP header audit, package
-baseline diff) → `victor enroll`/`victor run` once the cloud API exists →
-`victor ui` (local web dashboard) → Docker image.
+Remaining: `package-baseline-diff` (the one credentialed plugin) →
+`victor enroll`/`victor run` once the cloud API exists → Docker image.
+PDF export (`weasyprint` in the original design) is deliberately deferred
+— it needs system-level Pango/Cairo libraries that complicate a clean
+`pip install`; HTML/Markdown/XLSX cover the same need for now.
 
 ## License
 

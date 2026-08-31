@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VICTOR Collector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  :root {
+    --background: oklch(0.16 0.015 250);
+    --foreground: oklch(0.94 0.01 220);
+    --surface: oklch(0.21 0.018 250);
+    --card: oklch(0.2 0.018 250);
+    --border: oklch(0.31 0.025 250);
+    --muted-foreground: oklch(0.66 0.02 245);
+    --primary: oklch(0.82 0.15 197);
+    --toxic: oklch(0.86 0.22 143);
+    --violet: oklch(0.68 0.2 300);
+    --signal: oklch(0.64 0.24 22);
+    --warn: oklch(0.8 0.16 78);
+    --info: oklch(0.72 0.09 230);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: "Inter Tight", sans-serif;
+    min-height: 100vh;
+  }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  header {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    padding: .9rem 1.25rem; border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--surface) 60%, transparent);
+  }
+  .mark { font-weight: 700; letter-spacing: .25em; font-size: .95rem; color: var(--foreground); }
+  .mark .bracket { color: var(--primary); }
+  .badge {
+    font-family: "JetBrains Mono", monospace; font-size: .65rem; text-transform: uppercase;
+    letter-spacing: .12em; padding: .25rem .6rem; border-radius: 999px; border: 1px solid;
+  }
+  .badge-standalone { color: var(--toxic); border-color: color-mix(in oklch, var(--toxic) 40%, transparent);
+    background: color-mix(in oklch, var(--toxic) 10%, transparent); }
+  main { max-width: 900px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .6rem; margin-bottom: 1.5rem; }
+  .stat { border: 1px solid var(--border); background: var(--card); border-radius: .5rem; padding: .75rem; }
+  .stat .label { font-family: "JetBrains Mono", monospace; font-size: .6rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted-foreground); }
+  .stat .value { font-family: "JetBrains Mono", monospace; font-size: 1.4rem; font-weight: 700; margin-top: .2rem; }
+  .actions { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .actions a {
+    font-family: "JetBrains Mono", monospace; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--foreground); text-decoration: none; border: 1px solid var(--border); border-radius: .4rem;
+    padding: .5rem .9rem; background: var(--card);
+  }
+  .actions a:hover { border-color: var(--primary); color: var(--primary); }
+  .finding {
+    border: 1px solid var(--border); border-radius: .6rem; padding: 1rem 1.1rem; margin-bottom: .75rem;
+    background: var(--card);
+  }
+  .finding .top { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .finding h3 { margin: 0; font-size: .95rem; font-weight: 600; }
+  .sev { font-family: "JetBrains Mono", monospace; font-size: .6rem; text-transform: uppercase;
+    letter-spacing: .1em; padding: .15rem .5rem; border-radius: 999px; border: 1px solid; }
+  .sev-critical, .sev-high { color: var(--signal); border-color: color-mix(in oklch, var(--signal) 40%, transparent);
+    background: color-mix(in oklch, var(--signal) 12%, transparent); }
+  .sev-medium { color: var(--warn); border-color: color-mix(in oklch, var(--warn) 40%, transparent);
+    background: color-mix(in oklch, var(--warn) 12%, transparent); }
+  .sev-low, .sev-info { color: var(--info); border-color: color-mix(in oklch, var(--info) 40%, transparent);
+    background: color-mix(in oklch, var(--info) 12%, transparent); }
+  .meta { font-family: "JetBrains Mono", monospace; font-size: .72rem; color: var(--muted-foreground); margin-top: .35rem; }
+  .section-label { font-family: "JetBrains Mono", monospace; font-size: .6rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted-foreground); margin: .6rem 0 .2rem; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--background); border: 1px solid var(--border);
+    border-radius: .4rem; padding: .5rem .6rem; font-size: .75rem; margin: 0; }
+  .empty { text-align: center; color: var(--muted-foreground); padding: 3rem 1rem; font-family: "JetBrains Mono", monospace; font-size: .85rem; }
+  .empty code { color: var(--primary); }
+</style>
+</head>
+<body>
+  <header>
+    <span class="mark"><span class="bracket">[</span> VICTOR COLLECTOR <span class="bracket">]</span></span>
+    <span class="badge badge-standalone">Standalone</span>
+  </header>
+
+  <main>
+    <div class="stats" id="stats"></div>
+    <div class="actions">
+      <a href="/export/html">Export HTML</a>
+      <a href="/export/md">Export Markdown</a>
+      <a href="/export/xlsx">Export XLSX</a>
+    </div>
+    <div id="findings"></div>
+  </main>
+
+  <script>
+    const sevOrder = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
+
+    async function load() {
+      const [stats, findings] = await Promise.all([
+        fetch("/api/stats").then((r) => r.json()),
+        fetch("/api/findings").then((r) => r.json()),
+      ]);
+      renderStats(stats);
+      renderFindings(findings);
+    }
+
+    function renderStats(stats) {
+      const el = document.getElementById("stats");
+      const cards = [["Total", stats.total]];
+      for (const sev of ["Critical", "High", "Medium", "Low", "Info"]) {
+        if (stats.by_severity[sev]) cards.push([sev, stats.by_severity[sev]]);
+      }
+      el.innerHTML = cards
+        .map(([label, value]) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`)
+        .join("");
+    }
+
+    function renderFindings(findings) {
+      const el = document.getElementById("findings");
+      if (!findings.length) {
+        el.innerHTML = `<div class="empty">No findings yet.<br />Run <code>victor recon service-inventory &lt;target&gt;</code> to get started.</div>`;
+        return;
+      }
+      findings.sort((a, b) => (sevOrder[a.severity] ?? 9) - (sevOrder[b.severity] ?? 9));
+      el.innerHTML = findings
+        .map(
+          (f) => `
+        <article class="finding">
+          <div class="top">
+            <span class="sev sev-${f.severity.toLowerCase()}">${f.severity}</span>
+            <h3>${escapeHtml(f.title)}</h3>
+          </div>
+          <div class="meta">${escapeHtml(f.asset)} &middot; ${f.confidence}% confidence &middot; ${f.tags.join(", ") || "no tags"}</div>
+          <div class="section-label">Evidence</div>
+          <pre>${escapeHtml(f.evidence)}</pre>
+          <div class="section-label">Remediation</div>
+          <pre>${escapeHtml(f.remediation)}</pre>
+        </article>`
+        )
+        .join("");
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s ?? "";
+      return div.innerHTML;
+    }
+
+    load();
+  </script>
+</body>
+</html>
