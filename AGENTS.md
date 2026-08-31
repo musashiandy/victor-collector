@@ -93,26 +93,44 @@ the same token correctly got rejected. `status`, `run`, and
 `collector-info` all read real enrollment state now instead of a
 hardcoded "standalone" string.
 
-**`victor run`'s daemon loop — current top priority.** Still just
-prints a message (now enrollment-aware, but the loop itself doesn't
-exist). What's missing: the heartbeat (~60s) and task-poll (~15s) async
-loop, running the matching plugin when a task is polled, Privacy Mode
-redaction, and the observation upload call. `sync_client.py` is where
-this belongs — it already establishes the injectable-`httpx.Client`
-pattern (`enroll()`'s `client` parameter) that `heartbeat()`/`tasks()`/
-`upload_observations()` should reuse for the same dependency-free
-testing `test_sync_client.py` already does via `httpx.MockTransport`.
-Don't stub in fake success in the meantime — the current honest failure
-is correct until this is actually built.
+**`victor run`'s daemon loop is real too now** — `daemon.py` polls
+`GET /tasks`, heartbeats (immediately on picking up a task, every ~60s
+while idle otherwise — `HEARTBEAT_INTERVAL_SECONDS`/
+`POLL_INTERVAL_SECONDS`), runs the matching plugin via the existing
+registry, redacts through `redaction.py`, and uploads via
+`sync_client.upload_observations()`. `run_once()` is the single
+poll/heartbeat/execute cycle, kept separate from `run_forever()`
+specifically so it's testable without a real clock — see
+`test_daemon.py`'s `httpx.MockTransport`-based tests, all synchronous
+(no asyncio — see the module docstring for why that's a deliberate
+deviation from `collector-design.md` §3's proposal).
 
-Privacy Mode redaction (`docs/collector-design.md` §8) is also not
-built yet — there's been nothing to redact so far, since Standalone
-Mode never uploads anything. It needs to land alongside `victor run`,
-not after, since redaction has to be in place before the first real
-upload, not bolted on retroactively.
+Verified against real deployed AWS end to end, not just tests: enrolled
+a real test collector, manually queued a real `Task` item in DynamoDB
+(standing in for the still-missing task-creation endpoint —
+`BACKLOG.md` M0.5), ran one real `run_once()` cycle, and confirmed in
+DynamoDB that the task was marked completed and the observation landed
+with `target` and the nested `raw.url` field both correctly redacted to
+the same stable pseudonym. **Found and fixed a real production bug this
+way**: the Lambda's IAM role never had `dynamodb:BatchWriteItem`, so
+every real observation upload 500'd even though `POST /observations`
+had been "complete" since M0 — moto's mocked tests never exercise real
+IAM, so this was invisible until a real client with real credentials
+hit it. Fixed via `iam put-role-policy` on
+`victor-cloud-api-lambda-role`; see `DEPLOYMENT_STATUS.md` §2.
+
+Privacy Mode redaction (`docs/collector-design.md` §8) is real —
+`redaction.py`, stable per-session pseudonyms hashed with a per-session
+salt stored in `~/.victor/redaction-map.db`, catching both the
+observation's `target` field and any IPv4/exact-target-string matches
+nested anywhere in `raw` (recursive walk over dicts/lists). Reversal
+(for a future `report export` against cloud data) isn't built — nothing
+needs it yet since nothing downstream of upload exists.
 
 `package-baseline-diff` (the one credentialed plugin) and the Docker
-image are also still open — see `collector-design.md` §14.
+image are still open — see `collector-design.md` §14. Those are the
+current top priority now that both loops in the MVP checklist's closing
+line ("enroll → heartbeat → poll → run → redact → upload") are real.
 
 ## License
 

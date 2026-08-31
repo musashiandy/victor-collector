@@ -15,7 +15,7 @@ from collections.abc import Callable
 import httpx
 import typer
 
-from victor_collector import credentials, export, plugins, storage, sync_client, triage
+from victor_collector import credentials, daemon, export, plugins, storage, sync_client, triage
 from victor_collector.models import Target
 from victor_collector.plugins import PluginConfig
 
@@ -66,14 +66,14 @@ def run_daemon() -> None:
         )
         raise typer.Exit(code=1)
 
-    typer.secho(
-        f"Enrolled as {creds.collector_id} @ {creds.control_plane}, but the "
-        "heartbeat/poll/run loop isn't implemented yet - only `victor enroll` is real "
-        "so far. See docs/collector-design.md section 7.2-7.4 for the wire protocol "
-        "this will speak.",
-        fg=typer.colors.YELLOW,
-    )
-    raise typer.Exit(code=1)
+    typer.echo(f"Enrolled as {creds.collector_id} @ {creds.control_plane}")
+    try:
+        daemon.run_forever(creds, on_event=typer.echo)
+    except KeyboardInterrupt:
+        typer.echo("\nStopped.")
+    except sync_client.SyncError as exc:
+        typer.secho(f"Fatal sync error: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
 
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}

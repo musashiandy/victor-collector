@@ -8,12 +8,14 @@ licensed.
 > `tls-review`, `http-header-audit`) are real end-to-end: run one, it
 > triages results against a local Ollama model, stores real findings, and
 > `victor ui` serves them in a local dashboard with HTML/Markdown/XLSX
-> export — no cloud account needed. **`victor enroll` is real too now** —
-> exchanges a one-time token for a long-lived credential against the live
-> cloud API (see `DEPLOYMENT_STATUS.md` in victor-recon-console),
-> verified end-to-end against real AWS, not just mocks. `victor run`'s
-> heartbeat/poll/plugin/upload daemon loop is the one piece still
-> outstanding — see [Roadmap](#roadmap).
+> export — no cloud account needed. **The full cloud-connected loop is
+> real now too** — `victor enroll` and `victor run` (heartbeat, task
+> poll, plugin execution, Privacy Mode redaction, observation upload)
+> all work against the live cloud API, verified end-to-end against real
+> AWS, not just mocks (see `DEPLOYMENT_STATUS.md` in victor-recon-console).
+> The one thing that loop can't yet be driven by for real is a way for
+> the web app to actually create a task — that endpoint doesn't exist
+> server-side yet (`BACKLOG.md` M0.5).
 
 ## What this is
 
@@ -94,13 +96,12 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist)
-and `BACKLOG.md`'s M1. Current priority order: `victor enroll` is done →
-`victor run`'s heartbeat/poll/redact/upload daemon loop (the wire
-protocol is proven correct against the real cloud API; `victor enroll`
-already established the injectable-`httpx.Client` pattern this should
-reuse) → Privacy Mode redaction (`docs/collector-design.md` §8 — not yet
-built, since nothing has uploaded to the cloud yet to redact) →
-`package-baseline-diff` (the one credentialed plugin) → Docker image.
+and `BACKLOG.md`'s M1. `victor enroll` and `victor run` (heartbeat, task
+poll, plugin execution, Privacy Mode redaction, observation upload) are
+both done and proven against real AWS. Current priority order:
+`package-baseline-diff` (the one credentialed plugin — needs a
+credential-storage design decision first, `docs/collector-design.md`
+§15) → Docker image.
 PDF export (`weasyprint` in the original design) is deliberately deferred
 — it needs system-level Pango/Cairo libraries that complicate a clean
 `pip install`; HTML/Markdown/XLSX cover the same need for now.

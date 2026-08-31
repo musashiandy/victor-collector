@@ -13,14 +13,21 @@ import socket
 from importlib.metadata import version as _pkg_version
 
 import httpx
+from pydantic import BaseModel
 
-from victor_collector.models import CollectorCredentials
+from victor_collector.models import CollectorCredentials, RawObservation
 
 VERSION = _pkg_version("victor-collector")
 
 
 class EnrollmentError(Exception):
     """Raised when the cloud API rejects, or can't be reached for, enrollment."""
+
+
+class SyncError(Exception):
+    """Raised when an authenticated call (heartbeat/tasks/observations)
+    fails — network error, revoked credential, or unexpected response.
+    """
 
 
 def enroll(
@@ -74,3 +81,125 @@ def enroll(
         account_id=body["control_plane_id"],
         hostname=payload["hostname"],
     )
+
+
+def _authenticated_post(
+    client: httpx.Client, creds: CollectorCredentials, path: str, json_body: dict
+) -> httpx.Response:
+    try:
+        response = client.post(
+            f"{creds.control_plane}{path}",
+            headers={"Authorization": f"Bearer {creds.credential}"},
+            json=json_body,
+            timeout=15.0,
+        )
+    except httpx.HTTPError as exc:
+        raise SyncError(f"Couldn't reach {creds.control_plane}: {exc}") from exc
+    if response.status_code == 401:
+        raise SyncError("Collector credential is invalid or has been revoked.")
+    return response
+
+
+def _authenticated_get(
+    client: httpx.Client, creds: CollectorCredentials, path: str
+) -> httpx.Response:
+    try:
+        response = client.get(
+            f"{creds.control_plane}{path}",
+            headers={"Authorization": f"Bearer {creds.credential}"},
+            timeout=15.0,
+        )
+    except httpx.HTTPError as exc:
+        raise SyncError(f"Couldn't reach {creds.control_plane}: {exc}") from exc
+    if response.status_code == 401:
+        raise SyncError("Collector credential is invalid or has been revoked.")
+    return response
+
+
+def heartbeat(
+    creds: CollectorCredentials,
+    *,
+    status: str,
+    active_plugins: list[str] | None = None,
+    client: httpx.Client | None = None,
+) -> str:
+    """POST /v1/collectors/heartbeat — docs/collector-design.md §7.2.
+    Returns the server's min_supported_version.
+    """
+    owns_client = client is None
+    client = client or httpx.Client()
+    try:
+        response = _authenticated_post(
+            client,
+            creds,
+            "/v1/collectors/heartbeat",
+            {"version": VERSION, "status": status, "active_plugins": active_plugins or []},
+        )
+    finally:
+        if owns_client:
+            client.close()
+
+    if response.status_code != 200:
+        raise SyncError(f"Heartbeat failed ({response.status_code}): {response.text}")
+    return response.json()["min_supported_version"]
+
+
+class TaskOut(BaseModel):
+    task_id: str
+    session_id: str
+    plugin: str
+    target: str
+    safe_mode: bool
+
+
+class TasksResponse(BaseModel):
+    tasks: list[TaskOut]
+
+
+def get_tasks(creds: CollectorCredentials, *, client: httpx.Client | None = None) -> TasksResponse:
+    """GET /v1/collectors/tasks — docs/collector-design.md §7.3."""
+    owns_client = client is None
+    client = client or httpx.Client()
+    try:
+        response = _authenticated_get(client, creds, "/v1/collectors/tasks")
+    finally:
+        if owns_client:
+            client.close()
+
+    if response.status_code != 200:
+        raise SyncError(f"Task poll failed ({response.status_code}): {response.text}")
+    return TasksResponse.model_validate(response.json())
+
+
+def upload_observations(
+    creds: CollectorCredentials,
+    *,
+    session_id: str,
+    task_id: str,
+    observations: list[RawObservation],
+    client: httpx.Client | None = None,
+) -> int:
+    """POST /v1/sessions/{session_id}/observations —
+    docs/collector-design.md §7.4. Returns the number of observations
+    the server accepted.
+    """
+    body = {
+        "task_id": task_id,
+        "observations": [
+            {"plugin": obs.plugin, "target": obs.target, "raw": obs.raw, "redacted": obs.redacted}
+            for obs in observations
+        ],
+    }
+    owns_client = client is None
+    client = client or httpx.Client()
+    try:
+        response = _authenticated_post(
+            client, creds, f"/v1/sessions/{session_id}/observations", body
+        )
+    finally:
+        if owns_client:
+            client.close()
+
+    if response.status_code != 202:
+        raise SyncError(f"Observation upload failed ({response.status_code}): {response.text}")
+    return response.json()["accepted"]
