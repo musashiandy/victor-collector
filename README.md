@@ -14,8 +14,12 @@ licensed.
 > observation upload) work against the live cloud API, verified
 > end-to-end against real AWS including a real "Run Recon" click through
 > the actual web UI queuing a task a real collector picked up organically
-> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). The Docker image
-> is the one thing left from the MVP checklist — see [Roadmap](#roadmap).
+> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). **A Docker image
+> is defined** (`Dockerfile`, published to `ghcr.io/musashiandy/victor-collector`
+> via GitHub Actions on release tags) but not yet verified end-to-end —
+> Docker wasn't available in the dev environment that built it. It'll be
+> proven for real the first time CI actually runs it; see
+> [Docker](#docker) and [Roadmap](#roadmap).
 
 ## What this is
 
@@ -89,6 +93,39 @@ victor findings
 Only run this against systems you own or have explicit written
 authorization to test.
 
+## Docker
+
+Docker is the officially supported deployment path
+(`docs/collector-design.md` §10-§11). Two modes, matching whether you
+pass a command:
+
+```bash
+# Cloud-connected: no command -> defaults to `victor run`. The
+# entrypoint auto-enrolls on first boot using these env vars, so a
+# fresh container just works without an operator running `victor
+# enroll` by hand first.
+docker run -d --name victor-collector \
+  -e VICTOR_ENROLL_TOKEN=<one-time token from VICTOR Recon> \
+  -e VICTOR_CONTROL_PLANE=https://api.victorrecon.com \
+  -v victor-collector-data:/root/.victor \
+  ghcr.io/musashiandy/victor-collector:latest
+
+# Standalone: pass `victor ui` explicitly - no cloud, no token.
+docker run -d --name victor-collector \
+  -p 127.0.0.1:8787:8787 \
+  -e VICTOR_OLLAMA_URL=http://host.docker.internal:11434 \
+  -v victor-collector-data:/root/.victor \
+  ghcr.io/musashiandy/victor-collector:latest victor ui
+```
+
+Any other command (`victor recon ...`, `victor findings`, etc.) also
+passes straight through the entrypoint unmodified.
+
+Images are built and smoke-tested by
+[`.github/workflows/docker.yml`](.github/workflows/docker.yml) on every
+push, and published to GHCR (`linux/amd64` + `linux/arm64`) only on a
+version tag (`v*`) — not on every commit to `main`.
+
 ## Development
 
 ```bash
@@ -103,8 +140,11 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist)
-and `BACKLOG.md`'s M1. Every checklist item is done except the Docker
-image, which is the one thing left. PDF export (`weasyprint` in the
+and `BACKLOG.md`'s M1. Every checklist item is defined, including the
+Docker image — the one thing not yet *proven*, since Docker wasn't
+available in the environment that built it. First real priority: get a
+CI run (or any machine with Docker) to actually build and smoke-test it,
+and fix whatever that surfaces. PDF export (`weasyprint` in the
 original design) is deliberately deferred
 — it needs system-level Pango/Cairo libraries that complicate a clean
 `pip install`; HTML/Markdown/XLSX cover the same need for now.

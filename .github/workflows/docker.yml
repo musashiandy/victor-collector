@@ -1,0 +1,108 @@
+name: Docker
+
+# Builds and smoke-tests the image on every push/PR to main - this is
+# how the image actually gets built and tested at all, since Docker
+# isn't available in every contributor's dev environment. Publishing to
+# GHCR only happens on a version tag (v*), not every commit to main -
+# see docs/collector-design.md §11 in victor-recon-console.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: ghcr.io/musashiandy/victor-collector
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (single-arch, loaded locally for smoke tests)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: victor-collector:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test - all four MVP plugins are registered
+        run: |
+          docker run --rm victor-collector:ci victor plugins list | tee plugins.txt
+          grep -q "service-inventory" plugins.txt
+          grep -q "tls-review" plugins.txt
+          grep -q "http-header-audit" plugins.txt
+          grep -q "package-baseline-diff" plugins.txt
+
+      - name: Smoke test - victor ui refuses a non-loopback bind
+        run: |
+          set +e
+          docker run --rm victor-collector:ci victor ui --host 0.0.0.0
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+      - name: Smoke test - enroll against an unreachable control plane fails cleanly
+        run: |
+          set +e
+          docker run --rm victor-collector:ci victor enroll --token x --control-plane https://127.0.0.1:1
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+      - name: Smoke test - unenrolled `victor run` refuses to start
+        run: |
+          set +e
+          docker run --rm victor-collector:ci
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+  publish:
+    needs: build-and-validate
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 cross-build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (linux/amd64, linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
