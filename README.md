@@ -14,12 +14,17 @@ licensed.
 > observation upload) work against the live cloud API, verified
 > end-to-end against real AWS including a real "Run Recon" click through
 > the actual web UI queuing a task a real collector picked up organically
-> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). **A Docker image
-> is defined** (`Dockerfile`, published to `ghcr.io/musashiandy/victor-collector`
-> via GitHub Actions on release tags) but not yet verified end-to-end —
-> Docker wasn't available in the dev environment that built it. It'll be
-> proven for real the first time CI actually runs it; see
-> [Docker](#docker) and [Roadmap](#roadmap).
+> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). **The Docker
+> image builds and passes CI** — verified by
+> [GitHub Actions](https://github.com/musashiandy/victor-collector/actions/runs/34418102407)
+> on a real Linux runner (Docker wasn't available in the dev environment
+> that wrote the Dockerfile, so this was the first real build): all four
+> plugins register correctly, `victor ui` refuses a non-loopback bind,
+> `victor enroll` fails cleanly against an unreachable host, and an
+> unenrolled `victor run` refuses to start. Publishing to
+> `ghcr.io/musashiandy/victor-collector` happens on a version tag — no
+> tag has been cut yet, so no image is published there today. See
+> [Docker](#docker).
 
 ## What this is
 
@@ -140,12 +145,16 @@ doesn't require nmap installed.
 ## Roadmap
 
 Tracked in the main repo's `docs/collector-design.md` §14 (MVP checklist)
-and `BACKLOG.md`'s M1. Every checklist item is defined, including the
-Docker image — the one thing not yet *proven*, since Docker wasn't
-available in the environment that built it. First real priority: get a
-CI run (or any machine with Docker) to actually build and smoke-test it,
-and fix whatever that surfaces. PDF export (`weasyprint` in the
-original design) is deliberately deferred
+and `BACKLOG.md`'s M1. Every checklist item is done and CI-verified,
+including the Docker image. What's left: cutting a real `v0.1.0` tag so
+an image actually lands at `ghcr.io/musashiandy/victor-collector`
+(nothing's published there yet, since publishing only happens on a
+version tag); the two integration tests §14 originally scoped but this
+pass didn't build (`service-inventory` against a docker-compose
+Metasploitable-style fixture, and a full triage → SQLite → export
+round-trip); and a security-model summary + `CONTRIBUTING.md` for the
+README. PDF export (`weasyprint` in the original design) is deliberately
+deferred
 — it needs system-level Pango/Cairo libraries that complicate a clean
 `pip install`; HTML/Markdown/XLSX cover the same need for now.
 

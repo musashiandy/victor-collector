@@ -149,8 +149,19 @@ closed port all produce clean, correct errors end to end — only the
 literal "parse a real server's real output" step is untested against a
 live target.
 
-The Docker image is the one thing still open from `collector-design.md`
-§14's MVP checklist — see §11 for the base image and target platforms.
+The Docker image (`Dockerfile`, `docker-entrypoint.sh`,
+`.github/workflows/docker.yml`) closes out `collector-design.md` §14's
+MVP checklist — see §11 for the base image and target platforms. Built
+without Docker available locally, so
+[the first real CI run](https://github.com/musashiandy/victor-collector/actions/runs/34418102407)
+on a GitHub-hosted Linux runner was the actual proof it works: all four
+smoke tests passed (plugin registry, `victor ui`'s non-loopback-bind
+refusal, `victor enroll` failing cleanly against an unreachable host,
+an unenrolled `victor run` refusing to start). Publishing to
+`ghcr.io/musashiandy/victor-collector` is gated on a version tag
+(`v*`), not every commit to `main` — no tag has been cut yet, so
+nothing is actually published there yet even though the pipeline is
+proven to work.
 
 ## License
 
