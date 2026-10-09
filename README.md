@@ -20,30 +20,15 @@ not supported. Cloud header checks do not follow redirects. Docker operators use
 See the console repo's `docs/live-workspace-protocol.md` for the coordinated rollout.
 
 Open-source recon agent for [VICTOR Recon](https://victorrecon.com) — runs
-standalone with local AI, or connects to the cloud for deep AI triage. MIT
+standalone with local AI, or connects to the cloud for evidence review and reporting. MIT
 licensed.
 
-> **Status: early v0.1.** All four MVP recon plugins (`service-inventory`,
-> `tls-review`, `http-header-audit`, `package-baseline-diff`) are real:
-> run one standalone, it triages results against a local Ollama model,
-> stores real findings, and `victor ui` serves them in a local dashboard
-> with HTML/Markdown/XLSX export — no cloud account needed. **The full
-> cloud-connected loop is real too** — `victor enroll` and `victor run`
-> (heartbeat, task poll, plugin execution, Privacy Mode redaction,
-> observation upload) work against the live cloud API, verified
-> end-to-end against real AWS including a real "Run Recon" click through
-> the actual web UI queuing a task a real collector picked up organically
-> (see `DEPLOYMENT_STATUS.md` in victor-recon-console). **The Docker
-> image builds and passes CI** — verified by
-> [GitHub Actions](https://github.com/musashiandy/victor-collector/actions/runs/34418102407)
-> on a real Linux runner (Docker wasn't available in the dev environment
-> that wrote the Dockerfile, so this was the first real build): all four
-> plugins register correctly, `victor ui` refuses a non-loopback bind,
-> `victor enroll` fails cleanly against an unreachable host, and an
-> unenrolled `victor run` refuses to start. Publishing to
-> `ghcr.io/musashiandy/victor-collector` happens on a version tag — no
-> tag has been cut yet, so no image is published there today. See
-> [Docker](#docker).
+Current source passes 70 local tests. All four standalone plugins are implemented,
+with optional one-observation local Ollama triage and local reports. Cloud execution
+supports the three noncredentialed plugins with claims, outcomes and independent
+local authorization. Hosted cross-session AI triage is planned. Historical v0.1 live
+validation is recorded in the console's `DEPLOYMENT_STATUS.md`; it does not validate
+this coordinated 0.2.0 release. Build from source until a tested image tag is published.
 
 ## What this is
 
@@ -51,10 +36,10 @@ VICTOR Recon has two parts: the web dashboard (closed source) and this
 collector (open source, MIT). The collector runs on your network, performs
 recon, and either triages findings locally with your own AI (Standalone
 Mode, no account needed) or uploads redacted observations to VICTOR Recon
-for deeper, cross-session triage. Full design rationale is in
-[`docs/collector-design.md`](https://github.com/musashiandy/victor-recon-console/blob/main/docs/collector-design.md)
-and [`docs/collector-architecture.md`](https://github.com/musashiandy/victor-recon-console/blob/main/docs/collector-architecture.md)
-in the main [victor-recon-console](https://github.com/musashiandy/victor-recon-console)
+for evidence review and reporting; hosted cross-session triage is planned. Full design rationale is in
+[`docs/collector-design.md`](https://github.com/babbabooieq/victor-recon-console/blob/main/docs/collector-design.md)
+and [`docs/collector-architecture.md`](https://github.com/babbabooieq/victor-recon-console/blob/main/docs/collector-architecture.md)
+in the main [victor-recon-console](https://github.com/babbabooieq/victor-recon-console)
 repo — that's the source of truth for where this is headed; this README
 just covers what's actually built.
 

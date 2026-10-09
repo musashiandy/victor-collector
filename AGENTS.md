@@ -1,12 +1,26 @@
 # Working in this repo
 
 The design source of truth lives in the **victor-recon-console** repo,
-not here: [`docs/collector-design.md`](https://github.com/musashiandy/victor-recon-console/blob/main/docs/collector-design.md)
+not here: [`docs/collector-design.md`](https://github.com/babbabooieq/victor-recon-console/blob/main/docs/collector-design.md)
 is the buildable spec (CLI surface, plugin architecture, wire protocol,
-data model, MVP checklist), [`docs/collector-architecture.md`](https://github.com/musashiandy/victor-recon-console/blob/main/docs/collector-architecture.md)
+data model, MVP checklist), [`docs/collector-architecture.md`](https://github.com/babbabooieq/victor-recon-console/blob/main/docs/collector-architecture.md)
 has the higher-level decisions and their reasoning. Check both before
 changing behavior that contradicts them — if this repo and those docs
 disagree, that's a bug in one of them, not a judgment call.
+
+## Current cloud protocol ? 0.2.0
+
+Read the sibling console's `docs/live-workspace-protocol.md` before contract changes.
+Cloud tasks require an operator-owned `~/.victor/scope.json` allowlist, established by
+`victor authorize`. Missing/invalid/expired rules fail closed. Preserve exact-target,
+plugin and expiry checks; lists/ranges/CIDRs are not supported. Only HTTP header tasks
+accept URLs; cloud requests do not follow redirects. Cloud code never changes local
+operator policy. Standalone CLI remains an explicit operator workflow.
+Claim advertised tasks before execution, preserve source IDs/collection times and
+report terminal empty/failed outcomes without leaking exception secrets. Upload failure
+leaves a lease for bounded retry; do not claim durable spooling or lease renewal exists.
+Version changes require editable reinstall before checking the reported package version.
+No source commit or push proves API deployment or image publication.
 
 ## Plugin pattern
 
@@ -81,87 +95,14 @@ applied.
   Windows checkouts. Harmless for a Python project — don't mass-fix by
   hand.
 
-## What's not built yet
+## Remaining work and deployment status
 
-**`victor enroll` is real** — `sync_client.py` (the injectable-client
-HTTP layer) and `credentials.py` (`~/.victor/credentials.json`, mode
-`0600`) now do the actual token-exchange call against
-`POST /v1/collectors/enroll`, verified against the real deployed API
-(not just moto/mocks): a live Cognito user issued a real enrollment
-token, `victor enroll` consumed it for a real credential, and replaying
-the same token correctly got rejected. `status`, `run`, and
-`collector-info` all read real enrollment state now instead of a
-hardcoded "standalone" string.
-
-**`victor run`'s daemon loop is real too now** — `daemon.py` polls
-`GET /tasks`, heartbeats (immediately on picking up a task, every ~60s
-while idle otherwise — `HEARTBEAT_INTERVAL_SECONDS`/
-`POLL_INTERVAL_SECONDS`), runs the matching plugin via the existing
-registry, redacts through `redaction.py`, and uploads via
-`sync_client.upload_observations()`. `run_once()` is the single
-poll/heartbeat/execute cycle, kept separate from `run_forever()`
-specifically so it's testable without a real clock — see
-`test_daemon.py`'s `httpx.MockTransport`-based tests, all synchronous
-(no asyncio — see the module docstring for why that's a deliberate
-deviation from `collector-design.md` §3's proposal).
-
-Verified against real deployed AWS end to end, not just tests: enrolled
-a real test collector, manually queued a real `Task` item in DynamoDB
-(standing in for the still-missing task-creation endpoint —
-`BACKLOG.md` M0.5), ran one real `run_once()` cycle, and confirmed in
-DynamoDB that the task was marked completed and the observation landed
-with `target` and the nested `raw.url` field both correctly redacted to
-the same stable pseudonym. **Found and fixed a real production bug this
-way**: the Lambda's IAM role never had `dynamodb:BatchWriteItem`, so
-every real observation upload 500'd even though `POST /observations`
-had been "complete" since M0 — moto's mocked tests never exercise real
-IAM, so this was invisible until a real client with real credentials
-hit it. Fixed via `iam put-role-policy` on
-`victor-cloud-api-lambda-role`; see `DEPLOYMENT_STATUS.md` §2.
-
-Privacy Mode redaction (`docs/collector-design.md` §8) is real —
-`redaction.py`, stable per-session pseudonyms hashed with a per-session
-salt stored in `~/.victor/redaction-map.db`, catching both the
-observation's `target` field and any IPv4/exact-target-string matches
-nested anywhere in `raw` (recursive walk over dicts/lists). Reversal
-(for a future `report export` against cloud data) isn't built — nothing
-needs it yet since nothing downstream of upload exists.
-
-`package-baseline-diff` is real now too — the one credentialed plugin,
-`plugins/package_baseline_diff.py`. SSHes in (`paramiko`), lists
-packages (`dpkg -l`, falling back to `rpm -qa`), diffs against a
-locally stored baseline established on the target's first run (never
-overwritten automatically — a rolling diff against the previous run
-would hide slow drift). Credential storage resolved §15's open
-question: a plain file at `~/.victor/credentials/<name>.json`, mode
-`0600`, populated by the operator — not an OS keyring, since `keyring`
-needs a live Secret Service/D-Bus session that a headless Docker
-container (this collector's only officially supported deployment
-target) doesn't have by default. `parse_dpkg_output`/`parse_rpm_output`/
-`diff_packages` are pure and fully tested; the real SSH call itself
-isn't covered by an integration test (no local test server the way
-`tls_review` has one — bootstrapping a real `sshd` is meaningfully
-heavier, and neither Docker nor an SSH server was available in this
-session's dev environment to stand one up). Verified for real anyway,
-as far as this environment allows: the actual CLI, real credential
-loading, and a real `paramiko` connection attempt against a genuinely
-closed port all produce clean, correct errors end to end — only the
-literal "parse a real server's real output" step is untested against a
-live target.
-
-The Docker image (`Dockerfile`, `docker-entrypoint.sh`,
-`.github/workflows/docker.yml`) closes out `collector-design.md` §14's
-MVP checklist — see §11 for the base image and target platforms. Built
-without Docker available locally, so
-[the first real CI run](https://github.com/musashiandy/victor-collector/actions/runs/34418102407)
-on a GitHub-hosted Linux runner was the actual proof it works: all four
-smoke tests passed (plugin registry, `victor ui`'s non-loopback-bind
-refusal, `victor enroll` failing cleanly against an unreachable host,
-an unenrolled `victor run` refusing to start). Publishing to
-`ghcr.io/musashiandy/victor-collector` is gated on a version tag
-(`v*`), not every commit to `main` — no tag has been cut yet, so
-nothing is actually published there yet even though the pipeline is
-proven to work.
+Hosted AI triage, scheduled monitoring, durable upload spooling, lease renewal, broader
+scope ranges/exclusions and in-flight cancellation remain backlog work. Current source
+passes 70 local tests. Historical live validation is recorded in the console's
+`DEPLOYMENT_STATUS.md`; the 0.2.0 protocol requires a coordinated release.
+Docker image publication is gated on a version tag, not an implementation-branch push.
+Do not expose the unauthenticated local UI beyond loopback.
 
 ## License
 
