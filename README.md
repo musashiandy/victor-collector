@@ -1,5 +1,24 @@
 # victor-collector
 
+> **October 2026 local update — 0.2.0:** cloud tasks use claims/leases and terminal
+> outcomes, preserve source observation IDs/times and require an independent local
+> allowlist. Install the updated source before use; no 0.2.0 image has been published
+> or cloud API deployed by this pass. Hosted AI triage remains planned. The historical
+> v0.1 status below does not describe deployment of this new protocol.
+
+Before `victor run`, authorize each exact cloud target locally:
+
+```sh
+victor authorize example.com --expires 2026-11-01T00:00:00Z --plugins tls-review,http-header-audit
+```
+
+The rule lives in `~/.victor/scope.json`. Missing/expired/nonmatching rules refuse
+cloud execution. Authorize IPs or hosts for TLS/services; HTTP URLs are supported
+only for header checks. Ranges, lists, wildcards and embedded URL credentials are
+not supported. Cloud header checks do not follow redirects. Docker operators use
+`docker exec victor-collector victor authorize ...` with a persistent collector home.
+See the console repo's `docs/live-workspace-protocol.md` for the coordinated rollout.
+
 Open-source recon agent for [VICTOR Recon](https://victorrecon.com) — runs
 standalone with local AI, or connects to the cloud for deep AI triage. MIT
 licensed.

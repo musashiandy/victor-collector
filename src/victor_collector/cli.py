@@ -15,7 +15,7 @@ from collections.abc import Callable
 import httpx
 import typer
 
-from victor_collector import credentials, daemon, export, plugins, storage, sync_client, triage
+from victor_collector import credentials, daemon, export, plugins, policy, storage, sync_client, triage
 from victor_collector.models import Target
 from victor_collector.plugins import PluginConfig
 
@@ -41,7 +41,25 @@ def enroll(
     credentials.save(creds)
     typer.secho(f"Enrolled as {creds.collector_id}.", fg=typer.colors.GREEN)
     typer.echo(f"Credential stored at {credentials.CREDENTIALS_PATH} (mode 0600).")
-    typer.echo("Run `victor run` to start the heartbeat/task loop (not yet implemented).")
+    typer.echo("Authorize targets locally with `victor authorize`, then run `victor run`.")
+
+
+@app.command(name="authorize")
+def authorize_target(
+    target: str,
+    expires: str = typer.Option(..., "--expires", help="Authorization expiry with timezone, e.g. 2026-11-01T00:00:00Z."),
+    allowed_plugins: str = typer.Option("service-inventory,tls-review,http-header-audit", "--plugins", help="Comma-separated plugin names."),
+) -> None:
+    """Record independent operator approval for cloud tasks on this exact target."""
+    names = [name.strip() for name in allowed_plugins.split(",") if name.strip()]
+    try:
+        for name in names:
+            plugins.get(name)
+        policy.authorize(target, expires, names)
+    except (ValueError, policy.PolicyError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Local authorization stored at {policy.POLICY_PATH}. No cloud task can expand it.")
 
 
 @app.command()

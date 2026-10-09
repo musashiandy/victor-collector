@@ -18,7 +18,7 @@ from typing import Callable
 import httpx
 
 from victor_collector import plugins as plugin_registry
-from victor_collector import redaction, sync_client
+from victor_collector import policy, redaction, sync_client
 from victor_collector.models import CollectorCredentials, RawObservation, Target
 from victor_collector.plugins import PluginConfig
 from victor_collector.sync_client import TaskOut
@@ -37,11 +37,25 @@ def _execute_task(
     task: TaskOut,
     *,
     on_event: EventCallback,
+    lease_token: str | None = None,
 ) -> None:
+    def terminal(status: str, message: str | None = None) -> None:
+        if lease_token is not None:
+            sync_client.report_task_result(creds, task.task_id, status=status,
+                                           lease_token=lease_token, error=message, client=client)
+
+    try:
+        policy.assert_allowed(task.target, task.plugin)
+    except policy.PolicyError as exc:
+        on_event(f"skipping task {task.task_id}: {exc}")
+        terminal("failed", "Collector local authorization refused this task; run victor authorize locally")
+        return
+
     try:
         plugin = plugin_registry.get(task.plugin)
     except ValueError as exc:
         on_event(f"skipping task {task.task_id}: {exc}")
+        terminal("failed", "Plugin is not available on this collector")
         return
 
     # collector-design.md §5: a plugin that can do non-safe things
@@ -54,16 +68,20 @@ def _execute_task(
             f"skipping task {task.task_id}: plugin '{task.plugin}' can perform non-safe-mode "
             "actions, but this task didn't authorize that"
         )
+        terminal("failed", "Plugin refused by collector safe-mode policy")
         return
 
     try:
-        observations: list[RawObservation] = plugin.run(Target(value=task.target), PluginConfig())
-    except RuntimeError as exc:
+        observations: list[RawObservation] = plugin.run(Target(value=task.target), PluginConfig(follow_redirects=False))
+    except Exception as exc:
         on_event(f"task {task.task_id} ({task.plugin}) failed: {exc}")
+        # Never upload raw exception strings: they may contain a target or secret.
+        terminal("failed", "Plugin execution failed; inspect collector logs locally")
         return
 
     if not observations:
         on_event(f"task {task.task_id}: no observations produced")
+        terminal("empty")
         return
 
     redacted = [
@@ -76,6 +94,7 @@ def _execute_task(
             session_id=task.session_id,
             task_id=task.task_id,
             observations=redacted,
+            lease_token=lease_token,
             client=client,
         )
     except sync_client.SyncError as exc:
@@ -112,9 +131,10 @@ def run_once(
         return last_heartbeat_at
 
     task = tasks[0]  # one active plugin run at a time — collector-design.md §15
+    lease_token = sync_client.claim_task(creds, task.task_id, client=client) if task.claim_required else None
     sync_client.heartbeat(creds, status="running", active_plugins=[task.plugin], client=client)
     on_event(f"task {task.task_id}: running {task.plugin} against {task.target}")
-    _execute_task(creds, client, task, on_event=on_event)
+    _execute_task(creds, client, task, on_event=on_event, lease_token=lease_token)
     return now
 
 

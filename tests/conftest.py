@@ -16,6 +16,17 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 
+@pytest.fixture(autouse=True)
+def isolated_cloud_authorization(tmp_path, monkeypatch, request):
+    """Daemon fixtures are explicitly scoped; never read the operator's real policy."""
+    from victor_collector import policy
+    monkeypatch.setattr(policy, "POLICY_PATH", tmp_path / "scope.json")
+    if request.node.fspath.basename in {"test_daemon.py", "test_task_leases.py"}:
+        names = ["service-inventory", "tls-review", "http-header-audit", "nonexistent"]
+        for target in ["host", "10.10.10.25"]:
+            policy.authorize(target, "2099-01-01T00:00:00Z", names)
+
+
 def _generate_self_signed_cert(tmp_path):
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     cert = (

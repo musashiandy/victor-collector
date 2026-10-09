@@ -41,7 +41,7 @@ class HttpHeaderAuditPlugin:
     def run(self, target: Target, config: PluginConfig) -> list[RawObservation]:
         url = _normalize_url(target.value)
         timeout = config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
-        response = httpx.get(url, timeout=timeout, follow_redirects=True, verify=False)
+        response = httpx.get(url, timeout=timeout, follow_redirects=config.get("follow_redirects", True), verify=False)
         raw = analyze_headers(response.headers, str(response.url))
         raw["status_code"] = response.status_code
         return [RawObservation(plugin=self.name, target=str(response.url), raw=raw)]

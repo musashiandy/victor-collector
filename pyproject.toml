@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "victor-collector"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source recon agent for VICTOR Recon — runs standalone with local AI, or connects to the cloud for deep AI triage."
 readme = "README.md"
 license = { text = "MIT" }

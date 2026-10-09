@@ -150,6 +150,7 @@ class TaskOut(BaseModel):
     plugin: str
     target: str
     safe_mode: bool
+    claim_required: bool = False  # Older APIs do not advertise the lease protocol.
 
 
 class TasksResponse(BaseModel):
@@ -177,6 +178,7 @@ def upload_observations(
     session_id: str,
     task_id: str,
     observations: list[RawObservation],
+    lease_token: str | None = None,
     client: httpx.Client | None = None,
 ) -> int:
     """POST /v1/sessions/{session_id}/observations —
@@ -185,11 +187,15 @@ def upload_observations(
     """
     body = {
         "task_id": task_id,
+        "collector_version": VERSION,
         "observations": [
-            {"plugin": obs.plugin, "target": obs.target, "raw": obs.raw, "redacted": obs.redacted}
+            {"id": obs.id, "collected_at": obs.collected_at.isoformat(), "plugin": obs.plugin,
+             "target": obs.target, "raw": obs.raw, "redacted": obs.redacted}
             for obs in observations
         ],
     }
+    if lease_token is not None:
+        body["lease_token"] = lease_token
     owns_client = client is None
     client = client or httpx.Client()
     try:
@@ -203,3 +209,21 @@ def upload_observations(
     if response.status_code != 202:
         raise SyncError(f"Observation upload failed ({response.status_code}): {response.text}")
     return response.json()["accepted"]
+
+
+def claim_task(creds: CollectorCredentials, task_id: str, *, client: httpx.Client) -> str:
+    response = _authenticated_post(client, creds, f"/v1/collectors/tasks/{task_id}/claim", {})
+    if response.status_code != 200:
+        raise SyncError(f"Task claim failed ({response.status_code}); another worker may own it")
+    token = response.json().get("lease_token")
+    if not isinstance(token, str) or not token:
+        raise SyncError("Task claim returned no lease token")
+    return token
+
+
+def report_task_result(creds: CollectorCredentials, task_id: str, *, status: str,
+                       lease_token: str, error: str | None = None, client: httpx.Client) -> None:
+    response = _authenticated_post(client, creds, f"/v1/collectors/tasks/{task_id}/result",
+                                   {"status": status, "lease_token": lease_token, "error": error})
+    if response.status_code != 200:
+        raise SyncError(f"Task result failed ({response.status_code})")
